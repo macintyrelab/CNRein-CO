@@ -19,17 +19,24 @@ if __name__ == "__main__":
     listIn = np.array(sys.argv)
 
     maxPloidy = 10
-    
-    doCB = False
+    cellConfigFile = None
+
+    doCB = ''
     if '-CB' in listIn:
-        listIn = listIn[listIn!='-CB']
-        doCB = True
+        #doCB = True
+        doCB = 'CB'
+
+    if '-seperateBAMs' in listIn:
+        doCB = 'seperateBAMs'
     
     if '-maxPloidy' in listIn:
         maxPloidy = float(getValuesSYS(listIn, ['-maxPloidy'])[0])
 
+    if '-cellConfigFile' in listIn:
+        cellConfigFile = getValuesSYS(listIn, ['-cellConfigFile'])[0]
+
     values1 = getValuesSYS(listIn, keyList)
     bamLoc, refLoc, outLoc, refGenome = values1[0], values1[1], values1[2], values1[3]
 
-    runEverything(bamLoc, refLoc, outLoc, refGenome, doCB=doCB, maxPloidy=maxPloidy)
+    runEverything(bamLoc, refLoc, outLoc, refGenome, doCB=doCB, maxPloidy=maxPloidy, cellConfigFile= cellConfigFile)
 

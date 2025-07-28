@@ -296,7 +296,7 @@ def patientDoSmallBinning(read_folder, cell_folder, patientFile, hist_file, chr_
 
 
 
-def cellDoSmallBinning(read_folder, hist_file, chr_file, uniqueCell_file):
+def cellDoSmallBinning(read_folder, hist_file, chr_file, uniqueCell_file, cellConfigFile = None):
 
 
 
@@ -304,9 +304,15 @@ def cellDoSmallBinning(read_folder, hist_file, chr_file, uniqueCell_file):
     M = 100000
 
     dict = {}
+    if cellConfigFile is not None:
+        # open .tsv file
+        content = pd.read_csv(cellConfigFile, sep='\t')
+        goodCells = np.array(content[content.use].sampleID)
+        combined = '\t'.join(goodCells)
+
 
     for a0 in range(22):
-        
+
         #print (a0)
 
         a1 = a0 + 1
@@ -330,7 +336,11 @@ def cellDoSmallBinning(read_folder, hist_file, chr_file, uniqueCell_file):
                 name = fnames[b]
                 name = name.replace('.npz', '')
                 name = name.replace('.bam', '')
-                cellNames.append(name)
+                if cellConfigFile is not None:
+                    if name in combined:
+                        cellNames.append(name)
+                else:
+                    cellNames.append(name)
             cellNames = np.array(cellNames)
 
             np.savez_compressed(uniqueCell_file, cellNames)
@@ -356,7 +366,7 @@ def cellDoSmallBinning(read_folder, hist_file, chr_file, uniqueCell_file):
 
             data = loadnpz(fname2) // M
             if len(data.shape) == 2:
-                data = data[:, 0] 
+                data = data[:, 0]
             #print (data.shape)
             #quit()
 
@@ -443,12 +453,12 @@ def doHapSmallBinning(name_file, uniqueCell_file, nameOld_folder, hap_folder, ch
 
     #print (np.intersect1d(cellNames, fnames).shape)
     #quit()
-    
+
     perm1 = np.zeros(len(fnames), dtype=int)
     for a in range(len(fnames)):
         arg1 = np.argwhere(cellNames == fnames[a])[0, 0]
         perm1[a] = arg1
-    
+
 
 
 
@@ -456,7 +466,7 @@ def doHapSmallBinning(name_file, uniqueCell_file, nameOld_folder, hap_folder, ch
     M = 100000
 
 
-    
+
 
     chrAll = loadnpz(chr_file)
     histAll = np.zeros((len(fnames), chrAll.shape[0], 2), dtype=int)
@@ -470,8 +480,8 @@ def doHapSmallBinning(name_file, uniqueCell_file, nameOld_folder, hap_folder, ch
     chrList = np.array(chrList) - 1
 
     for chrA in chrList:
-        
-        
+
+
         chrNum = str(chrA + 1)
 
         #print (chrNum)
@@ -481,7 +491,7 @@ def doHapSmallBinning(name_file, uniqueCell_file, nameOld_folder, hap_folder, ch
 
         hapCounts = loadnpz(hap_file)
         positions = loadnpz(position_file)
-        
+
         print ('shape')
         print (chrA)
         print (hapCounts.shape)
@@ -505,18 +515,18 @@ def doHapSmallBinning(name_file, uniqueCell_file, nameOld_folder, hap_folder, ch
                 histAll[:, pos1 + indexStart] = histAll[:, pos1 + indexStart] + hapCounts[b]
             else:
                 excludeSum += 1
-        
+
         #print (positions.shape)
         #print ('excluded', excludeSum)
 
 
 
-    
+
 
     histAll = histAll[perm1]
 
     np.savez_compressed(rawHAP_file, histAll)
-    
+
 
 
 
@@ -533,7 +543,7 @@ read_folder = './data/' + folder1 + '/readCounts/pos'
 nameOld_folder = './data/' + folder1 + '/info/bamAll.txt'
 name_file = './data/' + folder1 + '/initial/cellNames.npz'
 
-hap_folder = './data/' + folder1 + '/phasedCounts/' #positions_chr' + a1 + '.npz' 
+hap_folder = './data/' + folder1 + '/phasedCounts/' #positions_chr' + a1 + '.npz'
 chr_file = './data/' + folder1 + '/initial/allChr_100k.npz' #used to be 10k
 rawHAP_file = './data/' + folder1 + '/initial/allRawHAP_100k.npz' #used to be 10k
 uniqueCell_file = './data/' + folder1 + '/initial/cellNames.npz'
@@ -561,10 +571,10 @@ def saveMappability():
     count = 0
 
     pos0, pos1 = 0, 0
-    
+
     while True:
         count += 1
-    
+
         # Get next line from file
         line = file1.readline()
         M = 100000
@@ -572,7 +582,7 @@ def saveMappability():
         #    print ([line])
         #    if count > M:
         #        quit()
-        
+
         M = 1000000
         if count % M == 0:
             print (count // M)
@@ -618,7 +628,7 @@ def saveMappability():
 
 #saveMappability()
 #quit()
-        
+
 def scaleMappability():
 
     type1 = 'hg19'
@@ -648,7 +658,7 @@ def scaleMappability():
 
 #scaleMappability()
 #quit()
-        
+
 
 def saveGC():
 
@@ -658,12 +668,12 @@ def saveGC():
 
     if refGenome == 'hg38':
         df_gc = pd.read_csv(refLoc + "/gc/hg38_1.gc.bed", sep='\t', low_memory=False)
-        
+
     else:
         df_gc = pd.read_csv(refLoc + "/gc/b37_1.gc.bed", sep='\t', low_memory=False)
 
 
-    
+
     chr_name = df_gc['#1_usercol'].to_numpy()
     gc_num_initial = df_gc['5_pct_gc'].to_numpy()
     #pos_end = df_gc['3_usercol'].to_numpy()
@@ -689,16 +699,16 @@ def saveGC():
 
         gc_val[a, :gc_num_chr.shape[0]] = gc_num_chr
 
-    
+
 
 
     if refGenome == 'hg38':
         np.savez_compressed('./data/ref/gc/hg38_len_100k.npz', gc_val )
-        
+
     else:
         np.savez_compressed('./data/ref/gc/hg19_len_100k.npz', gc_val )
-    
-        
+
+
 
 #saveGC()
 #quit()
@@ -707,7 +717,7 @@ def saveGC():
 def gcMapSubset(refGenome, refLoc, chr_file, hist_file, rawHAP_file, goodSubset_file, chr_file2, hapHist_file, bias_file, totalRead_file, lowHapDoImbalance):
 
 
-    
+
 
 
     if refGenome == 'hg19':
@@ -747,7 +757,7 @@ def gcMapSubset(refGenome, refLoc, chr_file, hist_file, rawHAP_file, goodSubset_
         #plt.plot(map1)
         #plt.show()
 
-        
+
         args2 = args1[map1 > 0.8]
         goodBool[args2] = 1
 
@@ -763,13 +773,13 @@ def gcMapSubset(refGenome, refLoc, chr_file, hist_file, rawHAP_file, goodSubset_
 
     #import matplotlib.pyplot as plt
 
-    
+
 
     sum1_sort = np.sort(sum1)
     removeTop = sum1_sort[:-sum1_sort.shape[0] // 100]
     mean1 = np.mean(removeTop)
     std1 = np.mean( (removeTop - mean1) ** 2 ) ** 0.5
-    cutoff = mean1 + (std1 * 6.0)#(std1 * 10.0)
+    cutoff = mean1 + (std1 * 8.0)#(std1 * 6.0)
 
     #print (sum1[sum1 < cutoff].shape[0] / sum1.shape[0])
 
@@ -808,7 +818,7 @@ def gcMapSubset(refGenome, refLoc, chr_file, hist_file, rawHAP_file, goodSubset_
 
 
 
-    
+
 
 
 
@@ -817,8 +827,8 @@ refGenome = 'hg38'
 refLoc = './data/ref'
 
 hist_file = outLoc + '/initial/allHistBam_100k.npz'
-rawHAP_file = outLoc + '/initial/allRawHAP_100k.npz' 
-chr_file = outLoc + '/initial/allChr_100k.npz' 
+rawHAP_file = outLoc + '/initial/allRawHAP_100k.npz'
+chr_file = outLoc + '/initial/allChr_100k.npz'
 goodSubset_file = outLoc + '/initial/subset.npz'
 chr_file2 = outLoc + '/initial/chr_100k.npz'
 hapHist_file = outLoc + '/initial/HAP_100k.npz'
@@ -842,7 +852,7 @@ def applyMapAdjustment(refGenome, refLoc, chr_file, hist_file, totalRead_file):
 
 
 
-    
+
 
     import matplotlib.pyplot as plt
     import scipy
@@ -868,7 +878,7 @@ def applyMapAdjustment(refGenome, refLoc, chr_file, hist_file, totalRead_file):
         plt.plot(map2[argHigh] )
         plt.ylim(-0.05, 2)
         plt.show()
-        
+
 
 
 
@@ -883,92 +893,92 @@ def modal_quantile_regression_wrapper(params):
 
 
 def modal_quantile_regression(df_regression, lowess_frac=0.2, degree=2, knots=[0.38]):
-        '''
-        Fits a B-spline polynomial curve through the "modal" quantile of the data:
-        * Runs quantile regression to fit a B-spline curve for each percentile 10-90
-        * Estimates the modal quantile as the quantile where difference in AUC is minimized
-        * Uses the curve fit to this modal quantile for normalization
+    '''
+    Fits a B-spline polynomial curve through the "modal" quantile of the data:
+    * Runs quantile regression to fit a B-spline curve for each percentile 10-90
+    * Estimates the modal quantile as the quantile where difference in AUC is minimized
+    * Uses the curve fit to this modal quantile for normalization
 
-        Parameters:
-            df_regression: pandas.DataFrame with at least columns [reads, gc]
-            lowess_frac: float, fraction of data used to estimate each y-value in Lowess smoothing of normalization curve
-            degree: int, degree of polynomial to fit to each section of the B-spline curve
-            knots: list of floats, GC values where B-spline polynomial is allowed to change
+    Parameters:
+        df_regression: pandas.DataFrame with at least columns [reads, gc]
+        lowess_frac: float, fraction of data used to estimate each y-value in Lowess smoothing of normalization curve
+        degree: int, degree of polynomial to fit to each section of the B-spline curve
+        knots: list of floats, GC values where B-spline polynomial is allowed to change
 
-        Returns:
-            pandas.DataFrame with additional columns
-                modal_curve: modal curve's predicted # reads for GC value in this row
-                modal_quantile: quantile selected as the mode (should be the same for all bins)
-                modal_corrected: corrected read count (i.e., reads / modal_curve)
-        '''
+    Returns:
+        pandas.DataFrame with additional columns
+            modal_curve: modal curve's predicted # reads for GC value in this row
+            modal_quantile: quantile selected as the mode (should be the same for all bins)
+            modal_corrected: corrected read count (i.e., reads / modal_curve)
+    '''
 
-        q_range = range(10, 91, 1)
-        quantiles = np.array(q_range) / 100
-        quantile_names = [str(x) for x in q_range]
+    q_range = range(10, 91, 1)
+    quantiles = np.array(q_range) / 100
+    quantile_names = [str(x) for x in q_range]
 
-        # need at least 3 values to compute the quantiles
-        if len(df_regression) < 10 or sum(df_regression['reads']) < 100:
-            df_regression['modal_quantile'] = None
-            df_regression['modal_curve'] = None
-            df_regression['modal_corrected'] = None
-            return df_regression
-
-
-
-        poly_quantile_model = smf.quantreg(f'reads ~ bs(gc, degree={degree}, knots={knots}, include_intercept = True)',
-                                           data=df_regression)
-        poly_quantile_fit = [poly_quantile_model.fit(q=q) for q in quantiles]
-        poly_quantile_predict = [poly_quantile_fit[i].predict(df_regression) for i in range(len(quantiles))]
-
-        poly_quantile_params = pd.DataFrame()
-
-        for i in range(len(quantiles)):
-            df_regression[quantile_names[i]] = poly_quantile_predict[i]
-            poly_quantile_params[quantile_names[i]] = poly_quantile_fit[i].params
-
-        # integration and mode selection
-
-        gc_min = df_regression['gc'].quantile(q=0.10)
-        gc_max = df_regression['gc'].quantile(q=0.90)
-
-        true_min = df_regression['gc'].min()
-        true_max = df_regression['gc'].max()
-
-        poly_quantile_integration = np.zeros(len(quantiles) + 1)
-
-        # form (k+1)-regular knot vector
-        repeats = degree + 1
-        my_t = np.r_[[true_min] * repeats, knots, [true_max] * repeats]
-        for i in range(len(quantiles)):
-            # compose params into piecewise polynomial
-            params = poly_quantile_params[quantile_names[i]].to_numpy()
-            pp = scipy.interpolate.PPoly.from_spline((my_t, params[1:] + params[0], degree))
-
-            # compute integral
-            poly_quantile_integration[i + 1] = pp.integrate(gc_min, gc_max)
-
-            # find the modal quantile
-        distances = poly_quantile_integration[1:] - poly_quantile_integration[:-1]
-
-        df_dist = pd.DataFrame({'quantiles': quantiles, 'quantile_names': quantile_names, 'distances': distances})
-        dist_max = df_dist['distances'].quantile(q=0.95)
-        df_dist_filter = df_dist[df_dist['distances'] < dist_max].copy()
-        df_dist_filter['lowess'] = lowess(df_dist_filter['distances'], df_dist_filter['quantiles'], frac=lowess_frac,
-                                          return_sorted=False)
-
-        modal_quantile = df_dist_filter.set_index('quantile_names')['lowess'].idxmin()
-
-        # add values to table
-
-        df_regression['modal_quantile'] = modal_quantile
-        df_regression['modal_curve'] = df_regression[modal_quantile]
-        df_regression['modal_corrected'] = df_regression['reads'] / df_regression[modal_quantile]
-
-        # handle negative or missing values in regions with outlier GC
-        df_regression.modal_corrected = df_regression.modal_corrected.fillna(0)
-        df_regression.loc[df_regression.modal_corrected < 0, 'modal_corrected'] = 1
-
+    # need at least 3 values to compute the quantiles
+    if len(df_regression) < 10 or sum(df_regression['reads']) < 100:
+        df_regression['modal_quantile'] = None
+        df_regression['modal_curve'] = None
+        df_regression['modal_corrected'] = None
         return df_regression
+
+
+
+    poly_quantile_model = smf.quantreg(f'reads ~ bs(gc, degree={degree}, knots={knots}, include_intercept = True)',
+                                       data=df_regression)
+    poly_quantile_fit = [poly_quantile_model.fit(q=q) for q in quantiles]
+    poly_quantile_predict = [poly_quantile_fit[i].predict(df_regression) for i in range(len(quantiles))]
+
+    poly_quantile_params = pd.DataFrame()
+
+    for i in range(len(quantiles)):
+        df_regression[quantile_names[i]] = poly_quantile_predict[i]
+        poly_quantile_params[quantile_names[i]] = poly_quantile_fit[i].params
+
+    # integration and mode selection
+
+    gc_min = df_regression['gc'].quantile(q=0.10)
+    gc_max = df_regression['gc'].quantile(q=0.90)
+
+    true_min = df_regression['gc'].min()
+    true_max = df_regression['gc'].max()
+
+    poly_quantile_integration = np.zeros(len(quantiles) + 1)
+
+    # form (k+1)-regular knot vector
+    repeats = degree + 1
+    my_t = np.r_[[true_min] * repeats, knots, [true_max] * repeats]
+    for i in range(len(quantiles)):
+        # compose params into piecewise polynomial
+        params = poly_quantile_params[quantile_names[i]].to_numpy()
+        pp = scipy.interpolate.PPoly.from_spline((my_t, params[1:] + params[0], degree))
+
+        # compute integral
+        poly_quantile_integration[i + 1] = pp.integrate(gc_min, gc_max)
+
+        # find the modal quantile
+    distances = poly_quantile_integration[1:] - poly_quantile_integration[:-1]
+
+    df_dist = pd.DataFrame({'quantiles': quantiles, 'quantile_names': quantile_names, 'distances': distances})
+    dist_max = df_dist['distances'].quantile(q=0.95)
+    df_dist_filter = df_dist[df_dist['distances'] < dist_max].copy()
+    df_dist_filter['lowess'] = lowess(df_dist_filter['distances'], df_dist_filter['quantiles'], frac=lowess_frac,
+                                      return_sorted=False)
+
+    modal_quantile = df_dist_filter.set_index('quantile_names')['lowess'].idxmin()
+
+    # add values to table
+
+    df_regression['modal_quantile'] = modal_quantile
+    df_regression['modal_curve'] = df_regression[modal_quantile]
+    df_regression['modal_corrected'] = df_regression['reads'] / df_regression[modal_quantile]
+
+    # handle negative or missing values in regions with outlier GC
+    df_regression.modal_corrected = df_regression.modal_corrected.fillna(0)
+    df_regression.loc[df_regression.modal_corrected < 0, 'modal_corrected'] = 1
+
+    return df_regression
 
 def findGCadjustment(hist_file, bias_file, goodSubset_file, RDR_file, threads=24):
     bin_subset = loadnpz(goodSubset_file)
@@ -978,12 +988,12 @@ def findGCadjustment(hist_file, bias_file, goodSubset_file, RDR_file, threads=24
     all_params = [(gc, read_counts[i]) for i in range(read_counts.shape[0])]
     with Pool(threads) as p:
         all_results = p.map(modal_quantile_regression_wrapper, all_params)
-   
+
     array = np.vstack([d.modal_corrected.values for d in all_results])
     np.savez_compressed(RDR_file, array)
 
 
-    
+
 
 
 
@@ -995,7 +1005,7 @@ def findGCadjustment(hist_file, bias_file, goodSubset_file, RDR_file, threads=24
 folder1 = 'DLP'
 
 hist_file = './data/' + folder1 + '/initial/allHistBam_100k.npz' #used to be 10k
-rawHAP_file = './data/' + folder1 + '/initial/allRawHAP_100k.npz' 
+rawHAP_file = './data/' + folder1 + '/initial/allRawHAP_100k.npz'
 chr_file = './data/' + folder1 + '/initial/allChr_100k.npz' #used to be 10k
 adjustment_file = './data/' + folder1 + '/initial/gc_adjustment.npz'
 goodSubset_file = './data/' + folder1 + '/initial/subset.npz'
@@ -1029,7 +1039,7 @@ def saveRDR(RDR_file, chr_file, chr_file_2, RDR_file_2, cellGood_file, doBAF, ha
     #adjustment = loadnpz(adjustment_file)
     #argGood = loadnpz(goodSubset_file)
 
-    
+
     N = 10
 
     #chr = chr[argGood]
@@ -1037,9 +1047,9 @@ def saveRDR(RDR_file, chr_file, chr_file_2, RDR_file_2, cellGood_file, doBAF, ha
     #if doBAF:
     #    hapData = hapData[:, argGood]
 
-    
 
-    
+
+
     if False:
         totalReads = np.sum(data, axis=1)
         cellGood = np.argwhere(totalReads > 20000)[:, 0]
@@ -1049,9 +1059,9 @@ def saveRDR(RDR_file, chr_file, chr_file_2, RDR_file_2, cellGood_file, doBAF, ha
         data = data[cellGood]
         if doBAF:
             hapData = hapData[cellGood]
-        
 
-    
+
+
         data = data / adjustment.reshape((1, -1))
         data = data / np.mean(data, axis=1).reshape((-1, 1))
         adjustment_new = np.zeros(2 * data.shape[1] // N )
@@ -1107,7 +1117,7 @@ def saveRDR(RDR_file, chr_file, chr_file_2, RDR_file_2, cellGood_file, doBAF, ha
             BAF_chr = BAF_chr.reshape((BAF_chr.shape[0], BAF_chr.shape[1] // N, N, 2 ))
             BAF_chr = np.sum(BAF_chr, axis=2)#.astype(float)
 
-            
+
             #quit()
 
             #BAF_chr2 = hapData[:, args2]
@@ -1117,18 +1127,18 @@ def saveRDR(RDR_file, chr_file, chr_file_2, RDR_file_2, cellGood_file, doBAF, ha
 
 
 
-            
+
 
             BAF_new[:, count1:count1+size1] = np.copy(BAF_chr)
             #BAF2[:, count2:count2+size2] = np.copy(BAF_chr2)
-        
 
-        
 
-        
+
+
+
         count1 +=  size1
         #count2 +=  size2
-    
+
 
     #print (count1)
 
@@ -1198,7 +1208,7 @@ doBAF = True
 
 
 
-def runProcessFull(outLoc, refLoc, refGenome, lowHapDoImbalance=True):
+def runProcessFull(outLoc, refLoc, refGenome, lowHapDoImbalance=True, cellConfigFile=None):
 
     numSteps = '9'
     stepName = 6
@@ -1215,7 +1225,8 @@ def runProcessFull(outLoc, refLoc, refGenome, lowHapDoImbalance=True):
     if os.path.exists(hist_file) and os.path.exists(chr_file):
         print("Skipping cellDoSmallBinning because both chr_file and hist_file are present")
     else:
-        cellDoSmallBinning(read_folder, hist_file, chr_file, uniqueCell_file)
+        cellDoSmallBinning(read_folder, hist_file, chr_file, uniqueCell_file, cellConfigFile=cellConfigFile)
+        # Output: saves /initial/cellNames.npz and /initial/allHistBam_100k.npz and /initial/allChr_100k.npz
 
     #quit()
 
@@ -1232,14 +1243,15 @@ def runProcessFull(outLoc, refLoc, refGenome, lowHapDoImbalance=True):
         print("Skipping doHapSmallBinning because rawHAP_file is present")
     else:
         doHapSmallBinning(name_file, uniqueCell_file, nameOld_folder, hap_folder, chr_file, rawHAP_file)
+        # Output: saves /initial/allRawHAP_100k.npz
 
 
 
 
 
     hist_file = outLoc + '/initial/allHistBam_100k.npz'
-    rawHAP_file = outLoc + '/initial/allRawHAP_100k.npz' 
-    chr_file = outLoc + '/initial/allChr_100k.npz' 
+    rawHAP_file = outLoc + '/initial/allRawHAP_100k.npz'
+    chr_file = outLoc + '/initial/allChr_100k.npz'
     goodSubset_file = outLoc + '/initial/subset.npz'
     chr_file2 = outLoc + '/initial/chr_100k.npz'
     hapHist_file = outLoc + '/initial/HAP_100k.npz'
@@ -1251,6 +1263,8 @@ def runProcessFull(outLoc, refLoc, refGenome, lowHapDoImbalance=True):
         print("Skipping gcMapSubset because all output files are present")
     else:
         gcMapSubset(refGenome, refLoc, chr_file, hist_file, rawHAP_file, goodSubset_file, chr_file2, hapHist_file, bias_file, totalRead_file, lowHapDoImbalance)
+        # Output: saves /initial/totalReads.npz, then /initial/HAP_100k.npz, then
+        # /initial/subset.npz /initial/chr_100k.npz /initial/bias.npz
     #quit()
 
 
@@ -1259,18 +1273,18 @@ def runProcessFull(outLoc, refLoc, refGenome, lowHapDoImbalance=True):
     bias_file = outLoc + '/initial/bias.npz'
     goodSubset_file = outLoc + '/initial/subset.npz'
     RDR_file = outLoc + '/initial/RDR_100k.npz'
-    
-    
-    
+
+
+
 
     stepName += 1
     stepString = str(stepName) + '/' + numSteps
     print ('Data processing — Step ' + stepString + ': GC bias correction... ')#, end='')
     findGCadjustment(hist_file, bias_file, goodSubset_file, RDR_file)
-    #quit()
+    # Output: saves /initial/RDR_100k.npz
 
 
-    
+
     hapHist_file = outLoc + '/initial/HAP_100k.npz' #used to be 10k
     RDR_file = outLoc + '/initial/RDR_100k.npz' #used to be 10k
     chr_file = outLoc + '/initial/chr_100k.npz'
@@ -1287,7 +1301,7 @@ def runProcessFull(outLoc, refLoc, refGenome, lowHapDoImbalance=True):
 
 #refLoc = './data/refNew'
 #outLoc = './data/newTN3'
-    
+
 refLoc = './data/ref'
 #outLoc = './data/ACT_P1'
 #refGenome = 'hg19'
@@ -1337,7 +1351,7 @@ def rebin(data, M, doPytorch=False):
         else:
             data = np.mean(data, axis=2)
         return data
-    
+
     if len(data.shape) == 3:
         #M = 10
         N = data.shape[1] // M
@@ -1348,7 +1362,7 @@ def rebin(data, M, doPytorch=False):
         else:
             data = np.mean(data, axis=2)
         return data
-    
+
 
 
 

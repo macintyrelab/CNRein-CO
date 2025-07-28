@@ -8,9 +8,7 @@ CNRein (formerly known as DeepCopy) is a deep reinforcement learning based evolu
   <img width="1000" height="220" src="./overview.png">
 </p>
 
-## Contact
-
-Please contact Stefan Ivanovic at stefan4@illinois.edu with any issues running the software or any requests for additional features in CNRein. 
+> **_NOTE:_**  This is an alternative version of CNRein adapted for usage at the Computational Oncology group. The original version of CNRein can be found [here](https://github.com/elkebir-group/CNRein).
 
 ## Installation
 
@@ -26,100 +24,88 @@ Manual installation is currently available and can be achieved by cloning this G
 - statsmodels
 - pytorch
 - shapeit4
-
-Note, pip can be used as an alternative to conda for any of these packages available via pip. 
-
-### Pip installation
-
-Run the below command to install CNRein
-```bash
-pip install CNRein
-```
-This automatically installs numpy, pandas, pysam, statsmodels, and pytorch. However, samtools, bcftools and shapeit4 still need to be installed (all of these are available via bioconda). 
-
-
-
+- tqdm
+- matplotlib
+- dendropy
+- scikit-bio
 
 ## Usage
 
 ### With manual installation
 
 If installed manually, the default usage is 
+
 ```bash
-python script.py -input <BAM file location> \
+python script.py -input <BAM files folder>/*.bam \
+    -seperateBAMs \
     -ref <reference folder location> \
     -output <location to store results> \
-    -refGenome <either "hg19" or "hg38">
+    -refGenome <either "hg19" or "hg38"> \
+    -cellConfigFile <bestfitting file location>
 ```
-An example usage could be as follows
-```bash
-python script.py -input ./data/TN3_FullMerge.bam -ref ./data/refNew -output ./data/newTN3 -refGenome hg38
-```
-Additionally, "-CB" can be included if cells are indicated by cell barcode rather than read group, and "-seperateBAMs" can be included if each cell has its own BAM file. 
 
-### With pip installation
+An example usage in the CNIO cluster could be as below
 
-CNRein can be run with the following command:
 ```bash
-CNRein -input <BAM file location> \
-    -ref <reference folder location> \
-    -output <location to store results> \
-    -refGenome <either "hg19" or "hg38">
+sbatch -o CNRein_DLP47-51_log.txt  -p long -t10000 --mem=100G -J CNRein --wrap "python script.py -input /storage/scratch01/groups/co/scdnaseq_processing/DLP47-51/alignment/markedbams/*.bam -seperateBAMs -ref /home/_groups/co/reference/CNRein-ref-renamed -output /storage/scratch01/groups/co/pipeline_testing/CNRein_DLP47-51 -refGenome hg19 -cellConfigFile /storage/scratch01/groups/co/scdnaseq_processing/DLP47-51/abscn/absoluteCN_bestfitting.txt"
 ```
-An example command could be:
-```bash
-CNRein -input ./data/TN3_FullMerge.bam \
-    -ref ./data/refNew \
-    -output ./data/newTN3 \
-    -refGenome hg38
-```
-Optional parameters include "-CB" if cells are indicated by cell barcode rather than read group, "-seperateBAMs" if each cell has its own BAM file, and "-maxPloidy {some value}" to set a maximum ploidy value for predictions. 
 
-Additionally, one can run only parts of the CNRein pipeline with the following command:
-```bash
-CNRein -step <name of step to be ran> \
-    -input <BAM file location> \
-    -ref <reference folder location> \
-    -output <location to store results> \
-    -refGenome <either "hg19" or "hg38">
+Remember to edit the absoluteCN_bestfitting.txt file to indicate which samples you want to run CNRein on, along with their ploidy values. This file should be in the format:
+
 ```
-Here "name of step to be ran" can be any of the three sequential steps: "processing" for data processing steps, "CNNaive" for additional NaiveCopy steps or "CNRein" for the final deep reinforcement learning step. 
-The "processing" step utilizes BAM files as inputs, and produces segments with haplotype specific read counts and GC bais corrected read depths (stored in "binScale") as well as intermediary files (stored in "initial", "counts", "info", "phased", "phasedCounts" and "readCounts"). 
-The "CNNaive" step utilized the segments and read counts produced by "process" and generates NaiveCopy's predictions stored in "finalPrediction" as well as intermediate files stored in "binScale". 
-The "CNRein" step utilizes the outputs of both "processing" and "CNNaive", and produces predictions in "finalPrediction", as well as the neural network model stored in "model". 
+sampleID	use	ploidy	purity	clonality	powered	LOHok	essentialok	essential_hloss
+DLP47_A1.markdup	TRUE	2.1	1	0.00945457055904532	TRUE	TRUE	TRUE
+DLP47_A12.markdup	FALSE	3.1	1	0.0622335579809648	TRUE	TRUE	FALSE	CWF19L2
+DLP47_B1.markdup	FALSE	6.3	1	0.0662268847835926	TRUE	TRUE	FALSE	CPSF2,RINT1,SNW1
+DLP47_G1.markdup	FALSE	6.8	1	0.065422716283008	TRUE	TRUE	TRUE
+DLP48_A1.markdup	TRUE	2.1	1	0.0194238916537555	TRUE	TRUE	TRUE
+DLP48_A11.markdup	TRUE	2.2	1	0.0540640563468282	TRUE	TRUE	TRUE
+DLP48_B1.markdup	TRUE	2.1	1	0.0142949794564785	TRUE	TRUE	TRUE
+...
+```
+
+Additionally, one can run only parts of the CNRein pipeline by commenting some lines in the DeepSomaticCopy/pipeline.py file:
+```python
+def runEverything(bamLoc, refLoc, outLoc, refGenome, doCB=False, maxPloidy=10, cellConfigFile= None):
+
+    runAllSteps(bamLoc, refLoc, outLoc, refGenome, useCB=doCB, cellConfigFile=cellConfigFile)
+    runProcessFull(outLoc, refLoc, refGenome, cellConfigFile=None)
+    scalorRunAll(outLoc, maxPloidy=maxPloidy, cellConfigFile=cellConfigFile)
+    easyRunRL(outLoc)
+    saveReformatCSV(outLoc, isNaive=False)
+    findTreeFromFile(outLoc)
+```
+- The "runAllSteps" processes the BAMs. Desired cells are selected and merged into one single bam to extract the total reads per cell per chromosome.
+- The "runProcessFull" step utilizes BAM data as inputs, and produces intermediary files (stored in "initial", "counts", "info", "phased", "phasedCounts" and "readCounts").
+- The "scalorRunAll" step produces segments with haplotype specific read counts and GC bias corrected read depths (stored in "binScale") and generates NaiveCopy's predictions stored in "finalPrediction".
+- The "easyRunRL" step utilizes the outputs of both "runProcessFull" and "scalorRunAll", and produces predictions in "finalPrediction", as well as the neural network model stored in "model".
+- The "saveReformatCSV" step transforms the .npz files into a more interpretable .csv for subsequent analyses.
+- The "findTreeFromFile" step computes the phylogenetic tree using the native CNRein algorithm.
+
 In terms of the precise files, we have the following. 
 
-#### Processing step
-Inputs: "-input" BAM file
+#### runAllSteps step
+Inputs: "-input" BAM location, "-cellConfigFile" (optional) file location.
 
-Outputs: In ./binScale the files "BAF_noise.npz", "bins.npz", "chr_avg.npz", "filtered_HAP_avg.npz", "filtered_RDR_avg.npz", and "filtered_RDR_noise.npz". Additionally all files in ./counts, ./info, ./phased, ./phasedCounts ./readCounts, and ./initial. 
+Outputs: All files in ./counts, ./info, ./phased, ./phasedCounts and ./readCounts. 
 
-#### CNNaive step
-Inputs: In ./binScale the files "BAF_noise.npz", "bins.npz", "chr_avg.npz", "filtered_HAP_avg.npz", "filtered_RDR_avg.npz", and "filtered_RDR_noise.npz". In ./initial the files chr_1M.npz, RDR_1M.npz, and HAP_1M.npz.
+#### runProcessFull step
+Inputs: All files in ./counts, ./info, ./phased, ./phasedCounts and ./readCounts.
 
-Outputs: In ./binScale the files "dividerAll.npz", "dividerError.npz", "dividers.npz", "initialCNA.npz", "initialIndex.npz", "initialUniqueCNA.npz" and "regions.npz". Additionally, "./finalPrediciton/CNNaivePrediction.csv". 
+Outputs: All files in ./initial.
 
-#### CNRein step
+#### scalorRunAll step
+Inputs: All files in ./initial.
+
+Outputs: All files in ./binScale. Additionally, "./finalPrediciton/CNNaivePrediction.csv". 
+
+#### easyRunRL step
 Inputs: In ./binScale the files "BAF_noise.npz", "bins.npz", "chr_avg.npz", "filtered_HAP_avg.npz", "filtered_RDR_avg.npz", "filtered_RDR_noise.npz", and "initialUniqueCNA.npz". 
 
-Outputs: In ./model the files "model_now.pt", and "pred_now.npz". Additionally, "./finalPrediciton/CNReinPrediction.csv". 
-
-
-The "CNNaive" and "CNRein" steps do not require bcftools, samtools or SHAPE-IT. 
-Instead, they only require python package dependencies that are automatically installed when installing CNRein through pip. 
-The steps "CNNaive" and "CNRein" only require the "-output" argument, and not "-ref", "refGenome", or "-input" (it is assumed that the correct data for these steps is already in the "-output" folder). 
-In the "examples" folder, we provide the input to the "CNNaive" and "CNRein" steps for three datasets from our paper. 
-For S0, we provide input files to "CNRein" but not "CNNaive" due to GitHub's file size constraints (since S0 contains more cells, the files are larger). 
-This allows for the below command to be ran without having to download any additional data.
-```bash
-CNRein -step CNNaive -output ./examples/TN3
-CNRein -step CNRein -output ./examples/TN3
-```
+Outputs: In ./model the files "model_now.pt", and "pred_now.npz". Additionally, "./finalPrediciton/CNReinPrediction.csv".
 
 ## Input requirements
 
-The default input format is a single BAM file with different read groups (or cell barcodes) for different cells. 
-Future updates will also allow individual BAM files for each cell. 
 The default reference files are publically available at https://zenodo.org/records/10076403. 
 The final output in the form of an easily interpretable CSV file is produced in the folder "finalPrediction" within the user provided "-output" folder. 
 

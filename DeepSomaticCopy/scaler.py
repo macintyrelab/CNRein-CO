@@ -1938,14 +1938,62 @@ def newFindDividers(bins_file, RDR_file, noise_file, BAF_file, BAF_noise_file, d
 
 
 
-def findInitialCNA(RDR_file, noise_file, BAF_file, BAF_noise_file, chr_file, divider_file, error_file, dividerList_file, initialCNA_file, initialUniqueCNA_file, initialUniqueIndex_file):
+def findInitialCNA(RDR_file, noise_file, BAF_file, BAF_noise_file, chr_file, divider_file, error_file, dividerList_file, initialCNA_file, initialUniqueCNA_file, cellConfigFile=None, uniqueCell_file=None):
 
+    # Read cell configuration if provided
+    cell_config = None
+    if cellConfigFile is not None:
+        try:
+            # Load cell names ordering from uniqueCell_file
+            cellNames = loadnpz(uniqueCell_file)
+            print(f"Loaded {len(cellNames)} cell names from unique cell file")
+
+            # Load cell configuration
+            cell_config = pd.read_csv(cellConfigFile, sep='\t')
+            print(f"Loaded cell configuration with {len(cell_config)} cells")
+
+            # Validate required columns exist
+            required_cols = ['sampleID', 'use', 'ploidy']
+            missing_cols = [col for col in required_cols if col not in cell_config.columns]
+            if missing_cols:
+                raise ValueError(f"Missing required columns in cell config file: {missing_cols}")
+
+            # Sort cell_config rows to match the order of cell_names
+            cell_config['sort_order'] = cell_config['sampleID'].map(
+                {cell_id: idx for idx, cell_id in enumerate(cellNames)}
+            )
+
+            # Filter out cells not in cell_names and sort
+            cell_config = cell_config.dropna(subset=['sort_order'])
+            cell_config = cell_config.sort_values('sort_order')
+            cell_config = cell_config.drop('sort_order', axis=1)
+
+            # Filter to only cells marked for use
+            used_cells = cell_config[cell_config['use'] == True].copy()
+            print(f"Found {len(used_cells)} cells marked for use")
+
+            if len(used_cells) == 0:
+                raise ValueError("No cells marked for use in cell configuration file")
+
+        except Exception as e:
+            print(f"Error reading cell configuration file: {e}")
+            print("Proceeding without cell filtering...")
+            cell_config = None
 
     def findCurrentCNA(RDR, noise, HAP, BAF_noise):
+        """
+        Find optimal copy number state for a single cell across all genomic regions.
 
+        Args:
+            RDR: Observed read depth ratios for each genomic region
+            noise: Noise levels for RDR measurements
+            HAP: Counts of A and B alleles [num_regions, 2]
+            BAF_noise: Noise levels for BAF measurements
 
-        
-        
+        Returns:
+            CNA matrix: [num_regions, 2] where columns are [maternal_copies, paternal_copies]
+        """
+
         int1 = np.floor(RDR)
         int1 = np.array([int1 - 1, int1, int1+1, int1+2])
 
@@ -1964,18 +2012,11 @@ def findInitialCNA(RDR_file, noise_file, BAF_file, BAF_noise_file, chr_file, div
         errors_RDR = np.zeros((maxIntFull+1, numTry, RDR.shape[0]))
         errors_RDR[:] = -1
 
-        
-
         for b in range(numTry):
 
             int2 = int1[b]
-            #int2 = int2.reshape((1, int2.shape[0]))
-
-            #print (int2[:10])
 
             maxInt = int(np.max(int2))
-            #range1 = (maxInt // 2) + 1
-            #range2 = (int2 // 2) + 1
             range1 = maxInt + 1
             range2 = int2 + 1
 
@@ -1984,119 +2025,40 @@ def findInitialCNA(RDR_file, noise_file, BAF_file, BAF_noise_file, chr_file, div
             for a in range(range1):
                 argValid = np.argwhere(range2 > a)[:, 0]
 
+                BAF_now = (int2[argValid]-float(a)) / (int2[argValid] + 1e-04)
 
-                #if 1 in argValid:
-                #    print (a)
+                HAP_now = HAP[argValid]
 
-                BAF_now = (int2[argValid]-float(a)) / (int2[argValid] + 1e-04) 
-                #BAF_error = np.abs(BAF_now - BAF[argValid])
-
-                #BAF_now_adjusted = (BAF_now * 0.9) + 0.05
-                #BAF_now_adjusted = (BAF_now * 0.95) + 0.025
-                #BAF_now_adjusted = (BAF_now * 0.99) + 0.005
-                BAF_now_adjusted = (BAF_now * 0.999) + 0.0005
-                #BAF_now_adjusted = tweakBAF(BAF_now)
-
-
-                HAP_now = HAP[argValid] 
-                #HAP_mod_now = HAP_mod[argValid] 
-
-                #if False:
-                #    BAF_error = (np.log(BAF_now_adjusted) * HAP_mod_now[:, 1]) + (np.log(1 - BAF_now_adjusted) * HAP_mod_now[:, 0] )
-                #    BAF_error = BAF_error * -1
-                #else:
                 BAF_measure = HAP_now[:, 1] / (np.sum(HAP_now, axis=1) + 1e-5)
                 BAF_error = ((BAF_measure - BAF_now) / BAF_noise[argValid]) ** 2
-                
-
 
                 errors_BAF[a, b, argValid] = np.copy(BAF_error)
-
-
-                #shift1 =  HAP_now[:, 1] -  HAP_now[:, 0]
-                #BAF_error = BAF_error + ((shift1 ** 2) / (np.sum(HAP_now, axis=1) + 1e-5)  )
                 
 
                 errorSum = (RDR_error[argValid] / noise[argValid]) ** 2
-                #errorSum = errorSum + (BAF_error ** 2)
 
                 errors_RDR[a, b, argValid] = np.copy(errorSum)
 
                 errorSum = errorSum + BAF_error
 
-
-
-                #errors[a, b, argValid] = RDR_error[argValid] + (0.05 * BAF_error)
-
-                #errors[a, b, argValid] = (RDR_error[argValid] / backgroundError1) + (BAF_error / backgroundError2)
-
                 errors[a, b, argValid] = errorSum
 
 
-
-        #argNoHap = np.argwhere (  np.sum(HAP, axis=1) == 0 )[:, 0]
-
-        
-
-        #print (errors[:,:, argNoHap[-3]]  )
-
-        #print (errorsRDR[:,:, argNoHap[-3]]  )
-
-
         errors[errors == -1] = np.max(errors) * 2
-
-        
         
 
         errors = errors.reshape(( (maxIntFull+1)*numTry, RDR.shape[0]))
         bestFit = np.argmin(errors, axis=0)
 
 
-
-        
-        #print (bestFit)
         maternalChoice = bestFit // numTry
-        #print (maternalChoice)
         intChoice = bestFit % numTry
 
-        
-        #print (intChoice[argNoHap[-3]])
-        #print (maternalChoice[argNoHap[-3]])
-
         intChoice = int1[intChoice, np.arange(intChoice.shape[0])]
-
-        #print (intChoice[argNoHap[-3]])
 
         CNA = np.zeros((intChoice.shape[0], 2), dtype=int)
         CNA[:, 0] = maternalChoice
         CNA[:, 1] = intChoice - maternalChoice
-
-
-        #argWeird = np.argwhere( np.abs(intChoice - RDR) > 0.9 )[:, 0]
-
-        if False:#argWeird.shape[0] > 0:
-            argWeird1 = argWeird[0]
-            print (argWeird1)
-            print (intChoice[argWeird1])
-            print (RDR[argWeird1])
-            print (noise[argWeird1])
-            print (HAP[argWeird1])
-            print (errors[:, argWeird1].reshape( (maxIntFull+1, numTry) )  ) 
-            print (errors_BAF[:, :, argWeird1]  ) 
-            print (errors_RDR[:, :, argWeird1] )  
-            quit()
-
-        #print (bestFit[argNoHap[-3]]  )
-
-        #print (RDR[argNoHap])
-        #print (intChoice[argNoHap])
-
-        #print (errors[:, argNoHap[-3]].reshape(  (maxIntFull+1, numTry) )   )
-
-        #ar1 = [RDR[argNoHap], intChoice[argNoHap]]
-        #ar1 = np.array(ar1).T
-        #print (ar1[-3])
-        #quit()
 
         
 
@@ -2108,21 +2070,24 @@ def findInitialCNA(RDR_file, noise_file, BAF_file, BAF_noise_file, chr_file, div
             print (errors[:, argIssue[0]])
             quit()
 
-        #print (np.min(CNA[:, 1]))
-        #quit()
         assert np.min(CNA[:, 1]) >= 0
 
         return CNA
 
-    
+    def doInitialPart(dividerNums, RDR_all, noise_all, BAF_all, BAF_noise_all):
+        """
+            Process CNA detection for multiple cells.
 
-  
+            Args:
+                dividerNums: Scaling factors for each cell's RDR data
+                RDR_all: Read depth ratios for all cells
+                noise_all: Noise levels for RDR
+                BAF_all: B-allele frequency data for all cells
+                BAF_noise_all: Noise levels for BAF
 
-
-    def doInitialPart(dividerNums, RDR_all, noise_all, BAF_all, BAF_noise_all, chr):
-
-        
-
+            Returns:
+                CNA results for all cells: [num_cells, num_regions, 2]
+            """
 
         CNAfull = np.zeros((RDR_all.shape[0], RDR_all.shape[1], 2), dtype=int)
 
@@ -2132,46 +2097,18 @@ def findInitialCNA(RDR_file, noise_file, BAF_file, BAF_noise_file, chr_file, div
 
             RDR = RDR_all[a]
 
-            #print (RDR.shape)
-            #quit()
-
             BAF = BAF_all[a]
-            #HAP_mod = HAP_mod_all[a]
             noise = noise_all[a]
             BAF_noise = BAF_noise_all[a]
-            #BAF = np.min(np.array([BAF, 1-BAF]), axis=0)
 
-            #RDR, BAF = x[a, :, 0], x[a, :, 1]
-            #RDR, BAF = RDR_all[a], BAF_all[a]
             RDR = RDR / dividerNums[a]
 
-            #CNA = findCurrentCNA(RDR, noise, BAF, HAP_mod, BAF_noise)
             CNA = findCurrentCNA(RDR, noise, BAF, BAF_noise)
 
 
             CNAfull[a] = CNA
 
-
-
-            if False:
-                argAbove = np.argwhere((CNA[:, 0] + CNA[:, 1]) > 2)[:, 0]
-
-                if True:#argAbove.shape[0] > 50:
-
-                    plt.plot(RDR)
-                    plt.plot(BAF)
-                    plt.plot(CNA[:, 0] + CNA[:, 1])
-                    #plt.plot(CNA1[:, 0] + CNA1[:, 1] + 1)
-                    #plt.plot(CNA[:, 0])
-                    #plt.plot(CNA[:, 1])
-                    plt.show()
-
         return CNAfull
-
-
-
-
-
 
     dividerNums = loadnpz(divider_file)
     divideError = loadnpz(error_file)
@@ -2185,81 +2122,123 @@ def findInitialCNA(RDR_file, noise_file, BAF_file, BAF_noise_file, chr_file, div
     else:
         BAF_all = loadnpz(BAF_file)[:dividerNums.shape[0]]
         BAF_noise_all = loadnpz(BAF_noise_file)[:dividerNums.shape[0]] + 1e-5
-        #HAP_mod = loadnpz(HAP_mod_file)
-    
 
-    #chr = loadnpz('./data/input/chr_S' + patientNum0 + '.npz')
     chr = loadnpz(chr_file)
 
     _, start1 = np.unique(chr, return_index=True)
-    end1 = np.concatenate((start1[1:], np.zeros(1) + chr.shape[0])).astype(int)
-
-    
-
-    argList = []
-    dividerNums = []
-
-    for a in range(RDR_all.shape[0]):
-        errorList = divideError[a]
-        errorList = errorList / (2 * chr.shape[0])
-
-        minList = []
-        arange1 = np.arange(errorList.shape[0])
-        min1 = np.min(errorList)
-        while np.min(errorList) < min1 + 1:
-            #if True:
-            argMin1 = np.argmin(errorList)
-            errorList[np.abs(arange1 - argMin1) <= 5] = min1 + 10
-            minList.append(argMin1)
-
-            argList.append(a)
-            dividerNums.append( divideAll[a][argMin1]  )
 
 
-    argList = np.array(argList).astype(int)
-    dividerNums = np.array(dividerNums)
-    _, indexFirst, indexCounts = np.unique(argList, return_index=True, return_counts=True)
+    if cell_config is None:
+        argList = []
+        dividerNums = []
 
-    subsetSingle = np.argwhere(indexCounts==1)[:, 0]
-    
+        for a in range(RDR_all.shape[0]):
+            errorList = divideError[a]
+            errorList = errorList / (2 * chr.shape[0])
+
+            minList = []
+            arange1 = np.arange(errorList.shape[0])
+            min1 = np.min(errorList)
+            while np.min(errorList) < min1 + 1:
+                #if True:
+                argMin1 = np.argmin(errorList)
+                errorList[np.abs(arange1 - argMin1) <= 5] = min1 + 10
+                minList.append(argMin1)
+
+                argList.append(a)
+                dividerNums.append( divideAll[a][argMin1]  )
+
+        argList = np.array(argList).astype(int)
+        dividerNums = np.array(dividerNums)
+        _, indexFirst, indexCounts = np.unique(argList, return_index=True, return_counts=True)
 
 
-    
-    if type(BAF_all) == type(''):
-        CNAfull = np.round(RDR_all[argList] / dividerNums.reshape((-1, 1)) ).astype(int)
+
+        if type(BAF_all) == type(''):
+            CNAfull = np.round(RDR_all[argList] / dividerNums.reshape((-1, 1)) ).astype(int)
+        else:
+            CNAfull = doInitialPart(dividerNums, RDR_all[argList], noise[argList], BAF_all[argList],  BAF_noise_all[argList])
+
+
+
+        np.savez_compressed(initialCNA_file, CNAfull[indexFirst])
+
+        if type(BAF_all) != type(''):
+            CNAfull = CNAfull.reshape((CNAfull.shape[0], CNAfull.shape[1]*2))
+
+        inverse1 = uniqueValMaker(CNAfull)
+        _, index1 = np.unique(inverse1, return_index=True)
+        CNAfull = CNAfull[index1]
+        if type(BAF_all) != type(''):
+            CNAfull = CNAfull.reshape((CNAfull.shape[0], CNAfull.shape[1]//2, 2))
+
+        CNAfull_total = np.sum(CNAfull, axis=2)
+        highNoise = np.sum(np.abs( CNAfull_total[:, 1:] - CNAfull_total[:, :-1] ), axis=1)
+        argGood = np.argwhere(highNoise <= 500)[:, 0]
+        CNAfull = CNAfull[argGood]
+
+        np.savez_compressed(initialUniqueCNA_file, CNAfull)
     else:
-        #CNAfull = doInitialPart(dividerNums, RDR_all[argList], noise[argList], BAF_all[argList], HAP_mod[argList],  BAF_noise_all[argList], chr)
-        CNAfull = doInitialPart(dividerNums, RDR_all[argList], noise[argList], BAF_all[argList],  BAF_noise_all[argList], chr)
-        
+        def getBinWeights(outLoc):
+            # Load required data files
+            goodSubset = loadnpz(outLoc + '/initial/subset.npz')
+            chr1 = loadnpz(outLoc + '/initial/chr_100k.npz')
+            chrAll = loadnpz(outLoc + '/initial/allChr_100k.npz')
+            bins = loadnpz(outLoc + '/binScale/bins.npz')
 
-    
-    np.savez_compressed(initialCNA_file, CNAfull[indexFirst])
+            # Calculate chromosome starts and adjust goodSubset
+            _, chrStarts = np.unique(chrAll, return_index=True)
+            goodSubset = goodSubset - chrStarts[chr1]
 
-    if type(BAF_all) != type(''):
-        CNAfull = CNAfull.reshape((CNAfull.shape[0], CNAfull.shape[1]*2))
+            # Get unique bin indices for start and end positions
+            _, index_start, segCounts = np.unique(bins, return_index=True, return_counts=True)
+            _, index_end = np.unique(bins[-1::-1], return_index=True)
+            index_end = bins.shape[0] - 1 - index_end
 
-    inverse1 = uniqueValMaker(CNAfull)
-    _, index1 = np.unique(inverse1, return_index=True)
-    CNAfull = CNAfull[index1]
-    if type(BAF_all) != type(''):
-        CNAfull = CNAfull.reshape((CNAfull.shape[0], CNAfull.shape[1]//2, 2))
-    relevantIndex = inverse1[indexFirst]
+            segBinLengths = np.array(index_end) - np.array(index_start)
+            binWeights = segBinLengths/segCounts
+
+            return binWeights
+
+        def scaleCNbyPloidy(cell_config, RDR_all, noise_all, BAF_all, BAF_noise_all):
+            """
+                Process CNA detection for multiple cells.
+
+                Args:
+                    cell_config: cell configuration DataFrame with 'sampleID', 'use', and 'ploidy' columns
+                    RDR_all: Read depth ratios for all cells
+                    noise_all: Noise levels for RDR
+                    BAF_all: B-allele frequency data for all cells
+                    BAF_noise_all: Noise levels for BAF
+
+                Returns:
+                    CNA results for all cells: [num_cells, num_regions, 2]
+                """
+            CNAfull = np.zeros((RDR_all.shape[0], RDR_all.shape[1], 2), dtype=int)
+            binWeights = getBinWeights("/".join(RDR_file.split("/")[:-2]))
+
+            for a in range(0, cell_config.shape[0]):
+
+                print (a, cell_config.shape[0])
+
+                RDR = RDR_all[a]
+
+                BAF = BAF_all[a]
+                noise = noise_all[a]
+                BAF_noise = BAF_noise_all[a]
+
+                observed_ploidy = np.average(RDR, weights=binWeights)
+                desired_ploidy = cell_config['ploidy'].iloc[a]
+                RDR = RDR * (desired_ploidy / observed_ploidy)
+
+                CNA = findCurrentCNA(RDR, noise, BAF, BAF_noise)
 
 
-    #plt.imshow(np.sum(CNAfull, axis=2))
-    #plt.show()
+                CNAfull[a] = CNA
 
-    CNAfull_total = np.sum(CNAfull, axis=2)
-    highNoise = np.sum(np.abs( CNAfull_total[:, 1:] - CNAfull_total[:, :-1] ), axis=1)
-    #print (highNoise.shape)
-    #print (CNAfull.shape)
-    #print (relevantIndex.shape)
-    argGood = np.argwhere(highNoise <= 500)[:, 0]
-    CNAfull = CNAfull[argGood]
-    #relevantIndex = relevantIndex[argGood]
-
-    np.savez_compressed(initialUniqueCNA_file, CNAfull)
-    #np.savez_compressed(initialUniqueIndex_file, relevantIndex)
+            return CNAfull
+        CNAfull = scaleCNbyPloidy(cell_config, RDR_all, noise, BAF_all,  BAF_noise_all)
+        np.savez_compressed(initialUniqueCNA_file, CNAfull)
 
 
 
@@ -2389,7 +2368,7 @@ def scalorRunBins(outLoc):
 
 
 
-def runNaiveCopy(outLoc, maxPloidy=10):
+def runNaiveCopy(outLoc, maxPloidy=10, cellConfigFile=None):
     
 
 
@@ -2424,11 +2403,11 @@ def runNaiveCopy(outLoc, maxPloidy=10):
     dividerList_file = outLoc + '/binScale/dividerAll.npz'
     BAF_file = outLoc + '/binScale/filtered_HAP_avg.npz'
     BAF_noise_file = outLoc + '/binScale/BAF_noise.npz'
+    uniqueCell_file = outLoc + '/initial/cellNames.npz'
     initialCNA_file = outLoc + '/binScale/initialCNA.npz'
     initialUniqueCNA_file = outLoc + '/binScale/initialUniqueCNA.npz'
-    initialUniqueIndex_file = outLoc + '/binScale/initialIndex.npz'
     #HAP_mod_file = outLoc + '/binScale/HAP_mod.npz'
-    findInitialCNA(RDR_file, noise_file, BAF_file, BAF_noise_file, chr_file, divider_file, error_file, dividerList_file, initialCNA_file, initialUniqueCNA_file, initialUniqueIndex_file)
+    findInitialCNA(RDR_file, noise_file, BAF_file, BAF_noise_file, chr_file, divider_file, error_file, dividerList_file, initialCNA_file, initialUniqueCNA_file, cellConfigFile, uniqueCell_file)
     
     
 
@@ -2436,9 +2415,9 @@ def runNaiveCopy(outLoc, maxPloidy=10):
     print ('Done')
 
 
-def scalorRunAll(outLoc, maxPloidy=10):
+def scalorRunAll(outLoc, maxPloidy=10, cellConfigFile=None):
     scalorRunBins(outLoc)
-    runNaiveCopy(outLoc, maxPloidy=maxPloidy)
+    runNaiveCopy(outLoc, maxPloidy=maxPloidy, cellConfigFile=cellConfigFile)
 
 
 #outLoc = './data/newTN3'

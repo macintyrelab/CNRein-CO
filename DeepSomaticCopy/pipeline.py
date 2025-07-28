@@ -41,13 +41,14 @@ def checkInvalidArg(listIn, keyList):
 
 
 
-def runEverything(bamLoc, refLoc, outLoc, refGenome, doCB=False, maxPloidy=10):
+def runEverything(bamLoc, refLoc, outLoc, refGenome, doCB=False, maxPloidy=10, cellConfigFile= None):
 
-    runAllSteps(bamLoc, refLoc, outLoc, refGenome, useCB=doCB)
-    runProcessFull(outLoc, refLoc, refGenome)
-    scalorRunAll(outLoc, maxPloidy=maxPloidy)
+    runAllSteps(bamLoc, refLoc, outLoc, refGenome, useCB=doCB, cellConfigFile=cellConfigFile)
+    runProcessFull(outLoc, refLoc, refGenome, cellConfigFile=None)
+    scalorRunAll(outLoc, maxPloidy=maxPloidy, cellConfigFile=cellConfigFile)
     easyRunRL(outLoc)
     saveReformatCSV(outLoc, isNaive=False)
+    findTreeFromFile(outLoc)
 
 def scriptRunEverything():
     import sys
