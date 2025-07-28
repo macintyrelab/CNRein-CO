@@ -2,7 +2,7 @@
 
 [![PyPI version](https://badge.fury.io/py/CNRein.svg?cacheSeconds=60)](https://badge.fury.io/py/CNRein)
 
-CNRein (formerly known as DeepCopy) is a deep reinforcement learning based evolution-aware algorithm for haplotype-specific copy number calling on single cell DNA sequencing data. 
+CNRein (formerly known as DeepCopy) is a deep reinforcement learning based evolution-aware algorithm for haplotype-specific copy number calling on single cell DNA sequencing data.
 
 <p align="center">
   <img width="1000" height="220" src="./overview.png">
@@ -29,11 +29,17 @@ Manual installation is currently available and can be achieved by cloning this G
 - dendropy
 - scikit-bio
 
+It is also possible to install the conda environment directly from the provided environment file:
+
+```bash
+conda update --all
+conda env create -f config_env.yml
+conda activate cnrein
+```
+
 ## Usage
 
-### With manual installation
-
-If installed manually, the default usage is 
+The default usage is
 
 ```bash
 python script.py -input <BAM files folder>/*.bam \
@@ -82,12 +88,12 @@ def runEverything(bamLoc, refLoc, outLoc, refGenome, doCB=False, maxPloidy=10, c
 - The "saveReformatCSV" step transforms the .npz files into a more interpretable .csv for subsequent analyses.
 - The "findTreeFromFile" step computes the phylogenetic tree using the native CNRein algorithm.
 
-In terms of the precise files, we have the following. 
+In terms of the precise files, we have the following.
 
 #### runAllSteps step
 Inputs: "-input" BAM location, "-cellConfigFile" (optional) file location.
 
-Outputs: All files in ./counts, ./info, ./phased, ./phasedCounts and ./readCounts. 
+Outputs: All files in ./counts, ./info, ./phased, ./phasedCounts and ./readCounts.
 
 #### runProcessFull step
 Inputs: All files in ./counts, ./info, ./phased, ./phasedCounts and ./readCounts.
@@ -97,16 +103,16 @@ Outputs: All files in ./initial.
 #### scalorRunAll step
 Inputs: All files in ./initial.
 
-Outputs: All files in ./binScale. Additionally, "./finalPrediciton/CNNaivePrediction.csv". 
+Outputs: All files in ./binScale. Additionally, "./finalPrediciton/CNNaivePrediction.csv".
 
 #### easyRunRL step
-Inputs: In ./binScale the files "BAF_noise.npz", "bins.npz", "chr_avg.npz", "filtered_HAP_avg.npz", "filtered_RDR_avg.npz", "filtered_RDR_noise.npz", and "initialUniqueCNA.npz". 
+Inputs: In ./binScale the files "BAF_noise.npz", "bins.npz", "chr_avg.npz", "filtered_HAP_avg.npz", "filtered_RDR_avg.npz", "filtered_RDR_noise.npz", and "initialUniqueCNA.npz".
 
 Outputs: In ./model the files "model_now.pt", and "pred_now.npz". Additionally, "./finalPrediciton/CNReinPrediction.csv".
 
 ## Input requirements
 
-The default reference files are publically available at https://zenodo.org/records/10076403. 
+The default reference files are publically available at https://zenodo.org/records/10076403.
 The final output in the form of an easily interpretable CSV file is produced in the folder "finalPrediction" within the user provided "-output" folder. 
 
 
