@@ -235,7 +235,7 @@ def findVariableBins(RDR_file, bins_file, chr_file, totalRead_file, doBAF, BAF_f
         #quit()
 
         bigScale = 200
-        scaleList = [10, 20, 40]#, 80]
+        scaleList = [5, 10, 20, 40]#, 80]
         
         RDR_diff = np.zeros(( len(scaleList), RDR.shape[1] ))
         BAF_diff = np.zeros(( len(scaleList), RDR.shape[1] ))
@@ -2238,6 +2238,20 @@ def findInitialCNA(RDR_file, noise_file, BAF_file, BAF_noise_file, chr_file, div
 
             return CNAfull
         CNAfull = scaleCNbyPloidy(cell_config, RDR_all, noise, BAF_all,  BAF_noise_all)
+        np.savez_compressed(initialCNA_file, CNAfull)
+
+        CNAfull = CNAfull.reshape((CNAfull.shape[0], CNAfull.shape[1]*2))
+
+        inverse1 = uniqueValMaker(CNAfull)
+        _, index1 = np.unique(inverse1, return_index=True)
+        CNAfull = CNAfull[index1]
+        CNAfull = CNAfull.reshape((CNAfull.shape[0], CNAfull.shape[1]//2, 2))
+
+        CNAfull_total = np.sum(CNAfull, axis=2)
+        highNoise = np.sum(np.abs( CNAfull_total[:, 1:] - CNAfull_total[:, :-1] ), axis=1)
+        argGood = np.argwhere(highNoise <= 500)[:, 0]
+        CNAfull = CNAfull[argGood]
+
         np.savez_compressed(initialUniqueCNA_file, CNAfull)
 
 

@@ -112,7 +112,13 @@ Outputs: In ./model the files "model_now.pt", and "pred_now.npz". Additionally, 
 
 ## Input requirements
 
+### Reference files
+
 The default reference files are publically available at https://zenodo.org/records/10076403.
+In the cluster, reference files are located at `/home/_groups/co/reference/CNRein-ref-renamed`. This is an alternative version of the default reference files where chromosome names were changed from 1, 2, ... to chr1, chr2, ... . An additional file was added to that folder called `blacklist/QDNAseq_hg19_blacklist.npz` which contains the indices of the blacklisted regions in the reference genome. This file is obtained from the QDNAseq package (note that indices in QDNAseq are 1-based, while CNRein uses 0-based indices, so positions were translated). A copy of this file can be found in the `additional_files` folder of this repository.
+
+### Final output
+
 The final output in the form of an easily interpretable CSV file is produced in the folder "finalPrediction" within the user provided "-output" folder. 
 
 

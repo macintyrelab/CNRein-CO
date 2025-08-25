@@ -779,7 +779,7 @@ def gcMapSubset(refGenome, refLoc, chr_file, hist_file, rawHAP_file, goodSubset_
     removeTop = sum1_sort[:-sum1_sort.shape[0] // 100]
     mean1 = np.mean(removeTop)
     std1 = np.mean( (removeTop - mean1) ** 2 ) ** 0.5
-    cutoff = mean1 + (std1 * 8.0)#(std1 * 6.0)
+    cutoff = mean1 + (std1 * 10.0)#(std1 * 6.0)
 
     #print (sum1[sum1 < cutoff].shape[0] / sum1.shape[0])
 
@@ -788,6 +788,14 @@ def gcMapSubset(refGenome, refLoc, chr_file, hist_file, rawHAP_file, goodSubset_
     #plt.show()
 
     argGood = argGood[sum1 <= cutoff]
+
+    # For hg19, remove blacklisted regions given by QDNAseq:
+    if refGenome == 'hg19':
+        blacklist = loadnpz(refLoc + '/blacklist/QDNAseq_hg19_blacklist.npz')
+        argGood = argGood[~np.isin(argGood, blacklist)]
+        print('Initial regions: {}'.format(goodBool.shape[0]))
+        print('Removed {} regions from hg19 blacklist'.format(blacklist.shape[0]))
+        print('Remaining regions: {}'.format(argGood.shape[0]))
 
 
 
@@ -804,9 +812,6 @@ def gcMapSubset(refGenome, refLoc, chr_file, hist_file, rawHAP_file, goodSubset_
 
 
     np.savez_compressed(hapHist_file, hapAll)
-
-
-
 
 
     np.savez_compressed(goodSubset_file, argGood)
